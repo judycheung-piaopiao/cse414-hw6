@@ -1,3 +1,5 @@
+import re
+
 from model.Vaccine import Vaccine
 from model.Caregiver import Caregiver
 from model.Patient import Patient
@@ -28,6 +30,30 @@ def create_patient(tokens):
         print("Username taken, try again")
         start()
         return
+
+    if len(password)<8:
+        print("Please enter a password of at least 8 characters")
+        start()
+        return
+    if not re.search(r'[A-Z]', password):
+        print("Password must contain at least one uppercase letter!")
+        start()
+        return
+
+    if not re.search(r'[a-z]', password):
+        print("Password must contain at least one lowercase letter!")
+        start()
+        return
+
+    if not re.search(r'[0-9]',password):
+        print("Please enter a password of at least one number!")
+        start()
+        return
+    if not re.search(r'[!@#?]',password):
+        print("Please enter a password of at least one special character!")
+        start()
+        return
+
     salt=Util.generate_salt()
     hash=Util.generate_hash(password,salt)
     patient=Patient(username=username,salt=salt,hash=hash)
@@ -81,6 +107,28 @@ def create_caregiver(tokens):
     # check 2: check if the username has been taken already
     if username_exists_caregiver(username):
         print("Username taken, try again!")
+        return
+    if len(password)<8:
+        print("Please enter a password of at least 8 characters")
+        start()
+        return
+    if not re.search(r'[A-Z]', password):
+        print("Password must contain at least one uppercase letter!")
+        start()
+        return
+
+    if not re.search(r'[a-z]', password):
+        print("Password must contain at least one lowercase letter!")
+        start()
+        return
+
+    if not re.search(r'[0-9]',password):
+        print("Please enter a password of at least one number!")
+        start()
+        return
+    if not re.search(r'[!@#?]',password):
+        print("Please enter a password of at least one special character!")
+        start()
         return
 
     salt = Util.generate_salt()
@@ -203,14 +251,240 @@ def search_caregiver_schedule(tokens):
     """
     TODO: Part 2
     """
-    pass
+    if len(tokens) != 2:
+        print("Please try again!")
+        start()
+        return
+    split_date=tokens[1].split("-")
+    if len(split_date) != 3:
+        print("Please try again!")
+        start()
+        return
+    if len(split_date[0]) != 2:
+        print("Please try again!")
+        start()
+        return
+    if len(split_date[1]) != 2:
+        print("Please try again!")
+        start()
+        return
+    if len(split_date[2]) != 4:
+        print("Please try again!")
+        start()
+        return
+
+    month=int(split_date[0])
+    day=int(split_date[1])
+    year=int(split_date[2])
+
+    if month==00 or day==00 or year==0000:
+        print("Please try again!")
+        start()
+        return
+    if day>31 or month>12:
+        print("Please try again!")
+        start()
+        return
+    if current_patient is None and current_caregiver is None:
+        print("Please login first!")
+        start()
+        return
+
+    #find available caregiver
+    res_str=""
+    cm=ConnectionManager()
+    conn = cm.create_connection()
+    cursor=conn.cursor(as_dict=True)
+    find_caregiver_for_date="select Username from Availabilities where Time=%s order by Username asc"
+    try:
+        d=datetime.datetime(year,month,day)
+        cursor.execute(find_caregiver_for_date,d)
+        result=cursor.fetchall()
+        if len(result) != 0:
+            for row in result:
+                res_str=res_str+row['Username']+" "
+            print(res_str)
+        else:
+            print("Please try again!")
+        cm.close_connection()
+    except pymssql.Error:
+        print("Please try again!")
+        cm.close_connection()
+
+    #find available vaccines
+    cm=ConnectionManager()
+    conn = cm.create_connection()
+    cursor=conn.cursor(as_dict=True)
+    find_vaccine="select * from Vaccines"
+    try:
+        cursor.execute(find_vaccine)
+        v_result=cursor.fetchall()
+        if len(v_result) != 0:
+            for row in v_result:
+                print(row['Name'],row['Doses'])
+        else:
+            print("Please try again!")
+        cm.close_connection()
+    except pymssql.Error:
+        print("Please try again!")
+        cm.close_connection()
+    start()
+
 
 
 def reserve(tokens):
     """
     TODO: Part 2
     """
-    pass
+    global current_caregiver
+    global current_patient
+    if current_caregiver is not None:
+        print("Please login as a patient!")
+        start()
+        return
+    if current_patient is None:
+        print("Please login first!")
+        start()
+        return
+    if len(tokens) != 3:
+        print("Please try again! len(tokens) != 3")
+        start()
+        return
+    date=tokens[1]
+    vaccine=tokens[2]
+    split_date=date.split("-")
+
+    if len(split_date) != 3:
+        print("Please try again!")
+        start()
+        return
+
+    if len(split_date[0]) != 2:
+        print("Please try again!")
+        start()
+        return
+    if len(split_date[1]) != 2:
+        print("Please try again!")
+        start()
+        return
+    if len(split_date[2]) != 4:
+        print("Please try again!")
+        start()
+        return
+
+    month = int(split_date[0])
+    day = int(split_date[1])
+    year = int(split_date[2])
+
+    if month == 00 or day == 00 or year == 0000:
+        print("Please try again!")
+        start()
+        return
+    if day > 31 or month > 12:
+        print("Please try again!")
+        start()
+        return
+
+    #check available caregivers
+    cm=ConnectionManager()
+    conn = cm.create_connection()
+    cursor=conn.cursor(as_dict=True)
+    find_caregiver_for_date="select Username from Availabilities where Time=%s order by Username asc"
+    try:
+        d=datetime.datetime(year,month,day)
+        cursor.execute(find_caregiver_for_date,d)
+        result=cursor.fetchall()
+        if len(result) != 0:
+            caregiver=[row['Username'] for row in result]
+            book_caregiver=caregiver[0]
+        else:
+            print("No caregiver is available!")
+            cm.close_connection()
+            start()
+            return
+    except pymssql.Error:
+        print("Please try again!")
+        cm.close_connection()
+        start()
+        return
+    cm.close_connection()
+
+    #check if vaccine is available
+    cm=ConnectionManager()
+    conn = cm.create_connection()
+    cursor=conn.cursor()
+    find_vaccine="select Name,Doses from Vaccines where Name=%s"
+    try:
+        cursor.execute(find_vaccine,vaccine)
+        v_result=cursor.fetchall()
+        if len(v_result)==0:
+            print("Not enough available doses!")
+            cm.close_connection()
+            start()
+            return
+        for row in v_result:
+            available_doses=row[1]
+            if available_doses>0:
+                available_doses-=1
+                update_doses="update Vaccines set Doses=%d where Name=%s"
+                cursor.execute(update_doses,(available_doses,vaccine))
+                conn.commit()
+                print("Updated available doses!")
+            else:
+                print("No available doses!")
+                cm.close_connection()
+                start()
+                return
+    except pymssql.Error:
+        print("Please try again!")
+        cm.close_connection()
+        start()
+        return
+    cm.close_connection()
+
+    #remove caregiver's availability
+    cm=ConnectionManager()
+    conn = cm.create_connection()
+    cursor=conn.cursor()
+    remove_caregiver="delete from Availabilities where Time=%s and Username=%s"
+    try:
+        cursor.execute(remove_caregiver,(d,book_caregiver))
+        conn.commit()
+    except pymssql.Error:
+        print("Please try again!")
+        cm.close_connection()
+        start()
+        return
+    cm.close_connection()
+
+    #add appointment
+    cm=ConnectionManager()
+    conn = cm.create_connection()
+    cursor=conn.cursor()
+    appoint_id="select max(ID) from Appointments"
+    try:
+        cursor.execute(appoint_id)
+        result=cursor.fetchall()
+        if result[0][0] is None:
+            id=1
+        else:
+            id=int(result[0][0])+1
+    except pymssql.Error:
+        print("Please try again!")
+        cm.close_connection()
+        start()
+        return
+    add_appoint="insert into Appointments values(%d,%s,%s,%s,%s)"
+    try:
+        cursor.execute(add_appoint, (id,d,current_patient.username,book_caregiver,vaccine))
+        print("Appointment ID "+str(id)+", Caregiver username "+str(book_caregiver))
+        conn.commit()
+    except pymssql.Error:
+        print("Please try again!")
+        cm.close_connection()
+    cm.close_connection()
+    start()
+
 
 
 def upload_availability(tokens):
@@ -253,7 +527,87 @@ def cancel(tokens):
     """
     TODO: Extra Credit
     """
-    pass
+    global current_caregiver
+    global current_patient
+    if len(tokens) != 2:
+        print("Please try again!")
+        start()
+        return
+    if current_caregiver is None and current_patient is None:
+        print("Log in first!")
+        start()
+        return
+
+    appoint_id=tokens[1]
+    cm=ConnectionManager()
+    conn = cm.create_connection()
+    cursor=conn.cursor()
+    find_appoint="select * from Appointments where ID=%s"
+    try:
+        cursor.execute(find_appoint,appoint_id)
+        result=cursor.fetchall()
+        if len(result) != 0:
+            for row in result:
+                app_date=row[1]
+                app_patient=row[2]
+                app_caregiver=row[3]
+                app_vaccine=row[4]
+                delete_appoint="delete from Appointments where ID=%s"
+                try:
+                    cursor.execute(delete_appoint,appoint_id)
+                    conn.commit()
+                except pymssql.Error:
+                    print("Please try again!")
+                    cm.close_connection()
+                    start()
+                    return
+                cm.close_connection()
+
+                #return the vaccine into available vaccine
+                cm=ConnectionManager()
+                conn = cm.create_connection()
+                cursor=conn.cursor()
+                return_vac="update Vaccines set Doses=Doses+1 where Name=%s"
+                try:
+                    cursor.execute(return_vac,app_vaccine)
+                    conn.commit()
+                except pymssql.Error:
+                    print("Please try again!")
+                    cm.close_connection()
+                    start()
+                    return
+                cm.close_connection()
+
+                #return caregiver's availability
+                cm=ConnectionManager()
+                conn = cm.create_connection()
+                cursor=conn.cursor()
+                return_avai="insert into Availabilities values (%s,%s)"
+                try:
+                    cursor.execute(return_avai,(str(app_date), str(app_caregiver)))
+                    conn.commit()
+                    print("Availability canceled!")
+                except pymssql.Error:
+                    print("Please try again!")
+                    cm.close_connection()
+                    start()
+                    return
+                cm.close_connection()
+        else:
+            print("Please try again!")
+            cm.close_connection()
+            start()
+            return
+    except pymssql.Error:
+        print("Please try again!")
+        cm.close_connection()
+        start()
+        return
+    start()
+
+
+
+
 
 
 def add_doses(tokens):
@@ -316,8 +670,61 @@ def show_appointments(tokens):
     '''
     TODO: Part 2
     '''
-    pass
+    global current_caregiver
+    global current_patient
+    if current_caregiver is None and current_patient is None:
+        print("Please login first!")
+        start()
+        return
 
+    #if now is patient logging
+    if current_patient is not None:
+        cm=ConnectionManager()
+        conn=cm.create_connection()
+        cursor=conn.cursor(as_dict=True)
+        show_appoint="select * from Appointments where p_name=%s order by ID asc"
+        try:
+            cursor.execute(show_appoint,current_patient.username)
+            result=cursor.fetchall()
+            if len(result) == 0:
+                print("Please try again!")
+                cm.close_connection()
+                start()
+                return
+            else:
+                for row in result:
+                    print(row['ID'],row['v_name'],row['Time'],row['c_name'])
+        except pymssql.Error:
+            print("Please try again!")
+            cm.close_connection()
+            start()
+            return
+        cm.close_connection()
+
+    #if now is caregiver logging
+    if current_caregiver is not None:
+        cm=ConnectionManager()
+        conn=cm.create_connection()
+        cursor=conn.cursor(as_dict=True)
+        c_appoint="select * from Appointments where c_name=%s order by ID asc"
+        try:
+            cursor.execute(c_appoint,current_caregiver.username)
+            c_result=cursor.fetchall()
+            if len(c_result) == 0:
+                print("Please try again! no appointments")
+                cm.close_connection()
+                start()
+                return
+            else:
+                for row in c_result:
+                    print(row['ID'],row['v_name'],row['Time'],row['p_name'])
+        except pymssql.Error:
+            print("Please try again!")
+            cm.close_connection()
+            start()
+            return
+        cm.close_connection()
+    start()
 
 def logout(tokens):
     """
@@ -370,7 +777,7 @@ def start():
             print("Please try again!")
             break
 
-        response = response.lower()
+
         tokens = response.split(" ")
         if len(tokens) == 0:
             ValueError("Please try again!")
@@ -390,7 +797,7 @@ def start():
             reserve(tokens)
         elif operation == "upload_availability":
             upload_availability(tokens)
-        elif operation == cancel:
+        elif operation == "cancel":
             cancel(tokens)
         elif operation == "add_doses":
             add_doses(tokens)
